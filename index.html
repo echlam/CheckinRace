@@ -66,6 +66,7 @@
       </div>
       <div>
         <h3 style="margin:0 0 6px">Last Week</h3>
+        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
         <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
       </div>
     </div>
@@ -102,7 +103,15 @@
     // events (optional for parsing)
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":true,"internalType":"uint256","name":"dayId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint32","name":"newTicketCount","type":"uint32"}],"name":"CheckIn","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"totalTickets","type":"uint256"}],"name":"RaceCreated","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+ "name":"races",
+ "outputs":[
+  {"internalType":"bool","name":"exists","type":"bool"},
+  {"internalType":"bool","name":"finished","type":"bool"},
+  {"internalType":"address","name":"winner","type":"address"},
+  {"internalType":"uint256","name":"totalTickets","type":"uint256"},
+  {"internalType":"uint256","name":"randomness","type":"uint256"}],
+ "stateMutability":"view","type":"function"}
   ];
 
   const CHAIN_ID_HEX = '0xaa36a7'; // 11155111
