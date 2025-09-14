@@ -1,1 +1,264 @@
-# CheckinRace
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Weekly Race dApp (Sepolia)</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  <style>
+    :root { --bg:#0b0f14; --card:#111826; --line:#1b2433; --txt:#eaf1ff; --muted:#9fb2cc; --accent:#3aa0ff; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--txt); font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { max-width:920px; margin:28px auto; padding:0 16px }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:12px 0; }
+    h1 { font-size:22px; margin:0 0 8px }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    input[type=text] { background:#0f1522; border:1px solid var(--line); color:var(--txt); padding:10px 12px; border-radius:10px; min-width:320px; }
+    button { background:#132030; border:1px solid var(--line); color:var(--txt); padding:10px 14px; border-radius:10px; cursor:pointer; }
+    button:hover { border-color:#2a3952 }
+    button.primary { background:var(--accent); border-color:transparent; color:#001b2e; font-weight:600 }
+    .pill { padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line); background:#0f1522; color:var(--muted); }
+    .ok { color:var(--ok) } .warn{ color:var(--warn)} .err{color:var(--err)}
+    .grid { display:grid; gap:8px; grid-template-columns: 1fr 1fr; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    a { color: var(--accent); text-decoration: none; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+    small { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Weekly Race dApp <span class="pill">Sepolia</span></h1>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnConnect" class="primary">1) Connect Wallet</button>
+        <button id="btnSwitch">Switch to Sepolia</button>
+        <span id="acct" class="pill">Not connected</span>
+        <span id="net" class="pill"></span>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <input id="addr" type="text" placeholder="Contract Address (0x...)" />
+        <button id="btnSave">Save</button>
+        <span class="pill">Owner: <span id="owner">?</span></span>
+      </div>
+      <small>
+        Cách dùng: Kết nối MetaMask → dán địa chỉ contract → Save. Đổi account trong MetaMask để check-in bằng nhiều ví.
+      </small>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnCheckIn" class="primary">Check In (today)</button>
+        <button id="btnRefresh">Refresh Stats (current week)</button>
+        <button id="btnCreateRace">Create Race (last week, Owner only)</button>
+      </div>
+      <div id="status" class="mono" style="margin-top:10px; white-space:pre-wrap;"></div>
+    </div>
+
+    <div class="card grid">
+      <div>
+        <h3 style="margin:0 0 6px">Current</h3>
+        <div>currentWeekId: <span id="curW" class="mono">-</span></div>
+        <div>currentDayId: <span id="curD" class="mono">-</span></div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 6px">Last Week</h3>
+        <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px">Participants (current week)</h3>
+      <table>
+        <thead><tr><th>Address</th><th>Tickets</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const log = (msg, type) => {
+    const el = document.getElementById('status');
+    const ts = new Date().toLocaleTimeString();
+    el.textContent = `[${ts}] ${msg}\n` + el.textContent;
+    if (type === 'err') el.style.color = 'var(--err)';
+    else el.style.color = '';
+  };
+
+  const CONTRACT_ABI = [
+    // views
+    {"inputs":[],"name":"currentWeekId","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"currentDayId","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"getParticipants","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"tickets","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+    // write
+    {"inputs":[],"name":"checkIn","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"createRace","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    // events (optional for parsing)
+    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":true,"internalType":"uint256","name":"dayId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint32","name":"newTicketCount","type":"uint32"}],"name":"CheckIn","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"totalTickets","type":"uint256"}],"name":"RaceCreated","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"}
+  ];
+
+  const CHAIN_ID_HEX = '0xaa36a7'; // 11155111
+  const EXPLORER = 'https://sepolia.etherscan.io';
+
+  let provider, signer, contract, currentAccount;
+
+  const $ = (id) => document.getElementById(id);
+  const addrInput = $('addr');
+
+  // load saved contract address
+  addrInput.value = localStorage.getItem('race_addr') || '';
+
+  $('btnSave').onclick = async () => {
+    const v = addrInput.value.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(v)) { log('❌ Contract address không hợp lệ', 'err'); return; }
+    localStorage.setItem('race_addr', v);
+    await initContract();
+    await refreshAll();
+    log('✅ Saved contract address: ' + v);
+  };
+
+  $('btnConnect').onclick = async () => {
+    if (!window.ethereum) { log('❌ Cài MetaMask trước đã', 'err'); return; }
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    currentAccount = await signer.getAddress();
+    $('acct').textContent = currentAccount;
+    const net = await provider.getNetwork();
+    $('net').textContent = `ChainId: ${net.chainId}`;
+    if (net.chainId.toString() !== '11155111') log('⚠️ Chưa ở Sepolia, bấm "Switch to Sepolia"', 'warn');
+    await initContract();
+    await refreshAll();
+    log('✅ Wallet connected');
+  };
+
+  $('btnSwitch').onclick = async () => {
+    if (!window.ethereum) return;
+    try {
+      await window.ethereum.request({ method:'wallet_switchEthereumChain', params:[{ chainId: CHAIN_ID_HEX }] });
+      const net = await provider.getNetwork();
+      $('net').textContent = `ChainId: ${net.chainId}`;
+      log('✅ Switched to Sepolia');
+      await refreshAll();
+    } catch (e) {
+      // If chain not added
+      if (e.code === 4902) {
+        await window.ethereum.request({
+          method:'wallet_addEthereumChain',
+          params:[{ chainId: CHAIN_ID_HEX, chainName:'Sepolia', nativeCurrency:{ name:'SepoliaETH', symbol:'ETH', decimals:18 }, rpcUrls:['https://sepolia.infura.io/v3/'], blockExplorerUrls:[EXPLORER] }]
+        });
+      } else {
+        log('❌ Switch network failed: ' + (e?.message || e), 'err');
+      }
+    }
+  };
+
+  $('btnCheckIn').onclick = async () => {
+    try {
+      if (!contract) { log('❌ Chưa có contract address. Hãy dán vào ô và bấm Save.', 'err'); return; }
+      const tx = await contract.checkIn();
+      log(`⏳ checkIn sent: ${tx.hash}`);
+      const rc = await tx.wait();
+      log(`✅ checkIn mined in block ${rc.blockNumber} — ` + `${EXPLORER}/tx/${tx.hash}`);
+      await refreshAll();
+    } catch (e) {
+      log('❌ ' + (e?.shortMessage || e?.message || e), 'err');
+    }
+  };
+
+  $('btnRefresh').onclick = async () => { await refreshAll(); };
+
+  $('btnCreateRace').onclick = async () => {
+    try {
+      if (!contract) { log('❌ Chưa có contract', 'err'); return; }
+      const curW = await contract.currentWeekId();
+      const lastW = curW - 1n;
+      const tx = await contract.createRace(lastW);
+      log(`⏳ createRace(${lastW}) sent: ${tx.hash}`);
+      const rc = await tx.wait();
+      log(`✅ createRace mined in block ${rc.blockNumber} — ${EXPLORER}/tx/${tx.hash}`);
+    } catch (e) {
+      log('❌ ' + (e?.shortMessage || e?.message || e), 'err');
+    }
+  };
+
+  async function initContract() {
+    if (!addrInput.value) return;
+    if (!provider) provider = new ethers.BrowserProvider(window.ethereum);
+    if (!signer) signer = await provider.getSigner();
+    contract = new ethers.Contract(addrInput.value.trim(), CONTRACT_ABI, signer);
+    // fetch owner
+    try {
+      const own = await contract.owner();
+      $('owner').textContent = own;
+      await updateOwnerButton();
+    } catch {}
+  }
+
+  async function updateOwnerButton() {
+    try {
+      const own = await contract.owner();
+      const acc = await signer.getAddress();
+      const isOwner = own.toLowerCase() === acc.toLowerCase();
+      $('btnCreateRace').disabled = !isOwner;
+      $('btnCreateRace').title = isOwner ? 'Owner action' : 'Switch MetaMask sang ví Owner để dùng';
+    } catch { $('btnCreateRace').disabled = true; }
+  }
+
+  async function refreshAll() {
+    if (!contract) return;
+    try {
+      const [curW, curD] = await Promise.all([ contract.currentWeekId(), contract.currentDayId() ]);
+      $('curW').textContent = curW.toString();
+      $('curD').textContent = curD.toString();
+      $('lastW').textContent = (curW - 1n).toString();
+
+      await updateOwnerButton();
+
+      // load participants & tickets for current week
+      const weekId = curW;
+      const addrs = await contract.getParticipants(weekId);
+      const tbody = $('tbody'); tbody.innerHTML = '';
+      for (const a of addrs) {
+        const t = await contract.tickets(weekId, a);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="mono"><a href="${EXPLORER}/address/${a}" target="_blank">${a}</a></td><td class="mono">${t.toString()}</td>`;
+        tbody.appendChild(tr);
+      }
+    } catch (e) {
+      log('❌ refresh error: ' + (e?.shortMessage || e?.message || e), 'err');
+    }
+  }
+
+  // listen account/network changes
+  if (window.ethereum) {
+    window.ethereum.on?.('accountsChanged', async (accounts) => {
+      if (!accounts?.length) return;
+      currentAccount = accounts[0];
+      $('acct').textContent = currentAccount;
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      if (addrInput.value) await initContract();
+      await refreshAll();
+    });
+    window.ethereum.on?.('chainChanged', async () => {
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      const net = await provider.getNetwork();
+      $('net').textContent = `ChainId: ${net.chainId}`;
+      await refreshAll();
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
