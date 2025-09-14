@@ -276,7 +276,7 @@
   const r = await contract.races(lastW);
   $('lastWinner').textContent = r.winner;
 }
-
+await loadLastWinner();
 </script>
 </body>
 </html>
