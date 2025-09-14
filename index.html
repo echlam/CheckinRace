@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Weekly Race dApp (DEV: ngày=1 phút, tuần=7 phút)</title>
+  <title>Cuộc đua tuần - echlam.moca</title>
   <!-- Ethers v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
   <style>
@@ -30,15 +30,15 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Weekly Race dApp <span class="pill">DEV (Sepolia • 1p/ngày • 7p/tuần)</span></h1>
+    <h1>Cuộc đua tuần<span class="pill">• echlam.moca •</span></h1>
 
     <div class="card">
       <div class="row">
         <button id="btnConnect" class="primary">1) Connect Wallet</button>
-        <button id="btnSwitch">Switch to Sepolia</button>
+        <button id="btnSwitch">Chuyển tới Sepolia</button>
         <span id="acct" class="pill">Not connected</span>
         <span id="net" class="pill"></span>
-        <span class="pill">Owner: <span id="owner">?</span></span>
+        <span class="pill">Admin: <span id="owner">?</span></span>
       </div>
       <span class="pill">
         Kết nối ví -> Chuyển qua Sepolia mạng thử nghiệm ETH -> Check in -> Chờ kết quả.
@@ -47,31 +47,31 @@
 
     <div class="card">
       <div class="row">
-        <button id="btnCheckIn" class="primary">Check In (today)</button>
-        <button id="btnRefresh">Refresh Stats (current week)</button>
+        <button id="btnCheckIn" class="primary">Check In</button>
+        <button id="btnRefresh">Làm mới số vé</button>
         <!-- Nút Create Race bị ẩn mặc định; chỉ hiện nếu ví cho phép -->
-        <button id="btnCreateRace" style="display:none">Create Race (manager only)</button>
+        <button id="btnCreateRace" style="display:none">Tạo cuộc đua (manager only)</button>
       </div>
       <div id="status" class="mono" style="margin-top:10px; white-space:pre-wrap;"></div>
     </div>
 
     <div class="card grid">
       <div>
-        <h3 style="margin:0 0 6px">Current</h3>
-        <div>currentWeekId: <span id="curW" class="mono">-</span></div>
-        <div>currentDayId: <span id="curD" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Hiện tại</h3>
+        <div>Số tuần: <span id="curW" class="mono">-</span></div>
+        <div>Số ngày: <span id="curD" class="mono">-</span></div>
       </div>
       <div>
-        <h3 style="margin:0 0 6px">Last Week</h3>
-        <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
-        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Tuần trước</h3>
+        <div>Số tuần trước: <span id="lastW" class="mono">-</span></div>
+        <div>Người thắng tuần trước: <span id="lastWinner" class="mono">-</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px">Participants (current week)</h3>
+      <h3 style="margin:0 0 10px">Số người tham gia</h3>
       <table>
-        <thead><tr><th>Address</th><th>Tickets</th></tr></thead>
+        <thead><tr><th>Address</th><th>Số vé</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
