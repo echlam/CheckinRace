@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Weekly Race dApp (Sepolia)</title>
+  <title>Weekly Race dApp (DEV: ngày=1 phút, tuần=7 phút)</title>
+  <!-- Ethers v6 -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
   <style>
     :root { --bg:#0b0f14; --card:#111826; --line:#1b2433; --txt:#eaf1ff; --muted:#9fb2cc; --accent:#3aa0ff; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
@@ -13,7 +14,7 @@
     .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:12px 0; }
     h1 { font-size:22px; margin:0 0 8px }
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    input[type=text] { background:#0f1522; border:1px solid var(--line); color:var(--txt); padding:10px 12px; border-radius:10px; min-width:320px; }
+    input[type=text] { background:#0f1522; border:1px solid var(--line); color:var(--txt); padding:10px 12px; border-radius:10px; min-width:360px; }
     button { background:#132030; border:1px solid var(--line); color:var(--txt); padding:10px 14px; border-radius:10px; cursor:pointer; }
     button:hover { border-color:#2a3952 }
     button.primary { background:var(--accent); border-color:transparent; color:#001b2e; font-weight:600 }
@@ -29,7 +30,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Weekly Race dApp <span class="pill">Sepolia</span></h1>
+    <h1>Weekly Race dApp <span class="pill">DEV (Sepolia • 1p/ngày • 7p/tuần)</span></h1>
 
     <div class="card">
       <div class="row">
@@ -45,7 +46,7 @@
         <span class="pill">Owner: <span id="owner">?</span></span>
       </div>
       <small>
-        Cách dùng: Kết nối MetaMask → dán địa chỉ contract → Save. Đổi account trong MetaMask để check-in bằng nhiều ví.
+        Gợi ý: Địa chỉ dưới đã điền sẵn. Bạn có thể thay địa chỉ khác nếu re-deploy.
       </small>
     </div>
 
@@ -66,8 +67,8 @@
       </div>
       <div>
         <h3 style="margin:0 0 6px">Last Week</h3>
-        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
         <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
+        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
       </div>
     </div>
 
@@ -82,14 +83,12 @@
 
 <script>
 (() => {
-  const log = (msg, type) => {
-    const el = document.getElementById('status');
-    const ts = new Date().toLocaleTimeString();
-    el.textContent = `[${ts}] ${msg}\n` + el.textContent;
-    if (type === 'err') el.style.color = 'var(--err)';
-    else el.style.color = '';
-  };
+  // ====== CONFIG ======
+  const DEFAULT_CONTRACT = "0x9cD8b9f00e4f51ae9c28E0c60f5d3842B92a1638"; // <— địa chỉ DEV (theo phút)
+  const CHAIN_ID_HEX = "0xaa36a7"; // Sepolia (11155111)
+  const EXPLORER = "https://sepolia.etherscan.io";
 
+  // ====== ABI rút gọn đủ chức năng ======
   const CONTRACT_ABI = [
     // views
     {"inputs":[],"name":"currentWeekId","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
@@ -97,117 +96,168 @@
     {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"getParticipants","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"tickets","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
     {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-    // write
+    // mapping races getter (struct)
+    {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],
+     "name":"races",
+     "outputs":[
+      {"internalType":"bool","name":"exists","type":"bool"},
+      {"internalType":"bool","name":"finished","type":"bool"},
+      {"internalType":"address","name":"winner","type":"address"},
+      {"internalType":"uint256","name":"totalTickets","type":"uint256"},
+      {"internalType":"uint256","name":"randomness","type":"uint256"}],
+     "stateMutability":"view","type":"function"},
+    // writes
     {"inputs":[],"name":"checkIn","outputs":[],"stateMutability":"nonpayable","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"createRace","outputs":[],"stateMutability":"nonpayable","type":"function"},
-    // events (optional for parsing)
+    // events (để parse logs)
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":true,"internalType":"uint256","name":"dayId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint32","name":"newTicketCount","type":"uint32"}],"name":"CheckIn","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"totalTickets","type":"uint256"}],"name":"RaceCreated","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],
- "name":"races",
- "outputs":[
-  {"internalType":"bool","name":"exists","type":"bool"},
-  {"internalType":"bool","name":"finished","type":"bool"},
-  {"internalType":"address","name":"winner","type":"address"},
-  {"internalType":"uint256","name":"totalTickets","type":"uint256"},
-  {"internalType":"uint256","name":"randomness","type":"uint256"}],
- "stateMutability":"view","type":"function"}
+    {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"}
   ];
 
-  const CHAIN_ID_HEX = '0xaa36a7'; // 11155111
-  const EXPLORER = 'https://sepolia.etherscan.io';
-
-  let provider, signer, contract, currentAccount;
-
+  // ====== Helpers ======
   const $ = (id) => document.getElementById(id);
-  const addrInput = $('addr');
-
-  // load saved contract address
-  addrInput.value = localStorage.getItem('race_addr') || '';
-
-  $('btnSave').onclick = async () => {
-    const v = addrInput.value.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(v)) { log('❌ Contract address không hợp lệ', 'err'); return; }
-    localStorage.setItem('race_addr', v);
-    await initContract();
-    await refreshAll();
-    log('✅ Saved contract address: ' + v);
+  const log = (msg, type) => {
+    const el = $("status");
+    const ts = new Date().toLocaleTimeString();
+    el.textContent = `[${ts}] ${msg}\n` + el.textContent;
+    if (type === "err") el.style.color = "var(--err)";
+    else if (type === "warn") el.style.color = "var(--warn)";
+    else el.style.color = "";
   };
 
-  $('btnConnect').onclick = async () => {
-    if (!window.ethereum) { log('❌ Cài MetaMask trước đã', 'err'); return; }
-    await window.ethereum.request({ method: 'eth_requestAccounts' });
+  // ====== State ======
+  let provider, signer, contract, currentAccount;
+
+  // ====== UI init ======
+  const addrInput = $("addr");
+  // set default address on first load
+  const saved = localStorage.getItem("race_addr");
+  if (!saved) {
+    addrInput.value = DEFAULT_CONTRACT;
+    localStorage.setItem("race_addr", DEFAULT_CONTRACT);
+  } else {
+    addrInput.value = saved;
+  }
+
+  $("btnSave").onclick = async () => {
+    const v = addrInput.value.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(v)) { log("❌ Contract address không hợp lệ", "err"); return; }
+    localStorage.setItem("race_addr", v);
+    await initContract();
+    await refreshAll();
+    log("✅ Saved contract address: " + v);
+  };
+
+  $("btnConnect").onclick = async () => {
+    if (!window.ethereum) { log("❌ Cài MetaMask trước đã", "err"); return; }
+    await window.ethereum.request({ method: "eth_requestAccounts" });
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
     currentAccount = await signer.getAddress();
-    $('acct').textContent = currentAccount;
+    $("acct").textContent = currentAccount;
     const net = await provider.getNetwork();
-    $('net').textContent = `ChainId: ${net.chainId}`;
-    if (net.chainId.toString() !== '11155111') log('⚠️ Chưa ở Sepolia, bấm "Switch to Sepolia"', 'warn');
+    $("net").textContent = `ChainId: ${net.chainId}`;
+    if (net.chainId.toString() !== "11155111") log('⚠️ Chưa ở Sepolia, bấm "Switch to Sepolia"', "warn");
     await initContract();
     await refreshAll();
-    log('✅ Wallet connected');
+    log("✅ Wallet connected");
   };
 
-  $('btnSwitch').onclick = async () => {
+  $("btnSwitch").onclick = async () => {
     if (!window.ethereum) return;
     try {
-      await window.ethereum.request({ method:'wallet_switchEthereumChain', params:[{ chainId: CHAIN_ID_HEX }] });
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_ID_HEX }] });
       const net = await provider.getNetwork();
-      $('net').textContent = `ChainId: ${net.chainId}`;
-      log('✅ Switched to Sepolia');
+      $("net").textContent = `ChainId: ${net.chainId}`;
+      log("✅ Switched to Sepolia");
       await refreshAll();
     } catch (e) {
-      // If chain not added
       if (e.code === 4902) {
         await window.ethereum.request({
-          method:'wallet_addEthereumChain',
-          params:[{ chainId: CHAIN_ID_HEX, chainName:'Sepolia', nativeCurrency:{ name:'SepoliaETH', symbol:'ETH', decimals:18 }, rpcUrls:['https://sepolia.infura.io/v3/'], blockExplorerUrls:[EXPLORER] }]
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: CHAIN_ID_HEX,
+            chainName: "Sepolia",
+            nativeCurrency: { name: "SepoliaETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://sepolia.infura.io/v3/"],
+            blockExplorerUrls: [EXPLORER]
+          }]
         });
       } else {
-        log('❌ Switch network failed: ' + (e?.message || e), 'err');
+        log("❌ Switch network failed: " + (e?.message || e), "err");
       }
     }
   };
 
-  $('btnCheckIn').onclick = async () => {
+  $("btnCheckIn").onclick = async () => {
     try {
-      if (!contract) { log('❌ Chưa có contract address. Hãy dán vào ô và bấm Save.', 'err'); return; }
+      if (!contract) { log("❌ Chưa có contract address. Hãy dán vào ô và bấm Save.", "err"); return; }
       const tx = await contract.checkIn();
       log(`⏳ checkIn sent: ${tx.hash}`);
       const rc = await tx.wait();
-      log(`✅ checkIn mined in block ${rc.blockNumber} — ` + `${EXPLORER}/tx/${tx.hash}`);
+      log(`✅ checkIn mined in block ${rc.blockNumber} — ${EXPLORER}/tx/${tx.hash}`);
       await refreshAll();
     } catch (e) {
-      log('❌ ' + (e?.shortMessage || e?.message || e), 'err');
+      log("❌ " + (e?.shortMessage || e?.message || e), "err");
     }
   };
 
-  $('btnRefresh').onclick = async () => { await refreshAll(); };
+  $("btnRefresh").onclick = async () => { await refreshAll(); };
 
-  $('btnCreateRace').onclick = async () => {
+  $("btnCreateRace").onclick = async () => {
     try {
-      if (!contract) { log('❌ Chưa có contract', 'err'); return; }
+      if (!contract) { log("❌ Chưa có contract", "err"); return; }
       const curW = await contract.currentWeekId();
+      if (curW === 0n) { // tránh weekId âm
+        log("⚠️ Chưa có tuần đã kết thúc (currentWeekId = 0). Chờ tuần DEV lật (≈7 phút).", "warn");
+        return;
+      }
       const lastW = curW - 1n;
+
+      // kiểm tra có vé tuần trước để tránh revert NO_TICKETS
+      const addrs = await contract.getParticipants(lastW);
+      let total = 0n;
+      for (const a of addrs) total += BigInt(await contract.tickets(lastW, a));
+      if (total === 0n) {
+        log(`⚠️ Tuần ${lastW} chưa có vé (NO_TICKETS).`, "warn");
+        return;
+      }
+
       const tx = await contract.createRace(lastW);
       log(`⏳ createRace(${lastW}) sent: ${tx.hash}`);
       const rc = await tx.wait();
       log(`✅ createRace mined in block ${rc.blockNumber} — ${EXPLORER}/tx/${tx.hash}`);
+
+      // Parse WinnerSelected để in winner ngay
+      const iface = new ethers.Interface(CONTRACT_ABI);
+      for (const lg of rc.logs) {
+        try {
+          const p = iface.parseLog(lg);
+          if (p.name === "WinnerSelected") {
+            const winner = p.args.winner;
+            log(`🏆 Winner: ${winner}`);
+            const span = document.getElementById("lastWinner");
+            if (span) span.textContent = winner;
+          }
+        } catch {}
+      }
+
+      await refreshAll();
     } catch (e) {
-      log('❌ ' + (e?.shortMessage || e?.message || e), 'err');
+      log("❌ " + (e?.shortMessage || e?.message || e), "err");
     }
   };
 
   async function initContract() {
-    if (!addrInput.value) return;
+    const ca = addrInput.value.trim();
+    if (!ca) return;
     if (!provider) provider = new ethers.BrowserProvider(window.ethereum);
     if (!signer) signer = await provider.getSigner();
-    contract = new ethers.Contract(addrInput.value.trim(), CONTRACT_ABI, signer);
-    // fetch owner
+    contract = new ethers.Contract(ca, CONTRACT_ABI, signer);
     try {
       const own = await contract.owner();
-      $('owner').textContent = own;
+      $("owner").textContent = own;
       await updateOwnerButton();
     } catch {}
   }
@@ -217,66 +267,75 @@
       const own = await contract.owner();
       const acc = await signer.getAddress();
       const isOwner = own.toLowerCase() === acc.toLowerCase();
-      $('btnCreateRace').disabled = !isOwner;
-      $('btnCreateRace').title = isOwner ? 'Owner action' : 'Switch MetaMask sang ví Owner để dùng';
-    } catch { $('btnCreateRace').disabled = true; }
+      $("btnCreateRace").disabled = !isOwner;
+      $("btnCreateRace").title = isOwner ? "Owner action" : "Switch MetaMask sang ví Owner để dùng";
+    } catch { $("btnCreateRace").disabled = true; }
+  }
+
+  async function loadLastWinner() {
+    if (!contract) return;
+    const curW = await contract.currentWeekId();
+    if (curW === 0n) { $("lastWinner").textContent = "-"; return; }
+    const r = await contract.races(curW - 1n);
+    $("lastWinner").textContent = r.winner;
   }
 
   async function refreshAll() {
     if (!contract) return;
     try {
       const [curW, curD] = await Promise.all([ contract.currentWeekId(), contract.currentDayId() ]);
-      $('curW').textContent = curW.toString();
-      $('curD').textContent = curD.toString();
-      $('lastW').textContent = (curW - 1n).toString();
+      $("curW").textContent = curW.toString();
+      $("curD").textContent = curD.toString();
+      $("lastW").textContent = (curW - 1n >= 0n ? (curW - 1n).toString() : "-");
 
       await updateOwnerButton();
+      await loadLastWinner();
 
       // load participants & tickets for current week
       const weekId = curW;
       const addrs = await contract.getParticipants(weekId);
-      const tbody = $('tbody'); tbody.innerHTML = '';
+      const tbody = $("tbody"); tbody.innerHTML = "";
       for (const a of addrs) {
         const t = await contract.tickets(weekId, a);
-        const tr = document.createElement('tr');
+        const tr = document.createElement("tr");
         tr.innerHTML = `<td class="mono"><a href="${EXPLORER}/address/${a}" target="_blank">${a}</a></td><td class="mono">${t.toString()}</td>`;
         tbody.appendChild(tr);
       }
     } catch (e) {
-      log('❌ refresh error: ' + (e?.shortMessage || e?.message || e), 'err');
+      log("❌ refresh error: " + (e?.shortMessage || e?.message || e), "err");
     }
   }
 
   // listen account/network changes
   if (window.ethereum) {
-    window.ethereum.on?.('accountsChanged', async (accounts) => {
+    window.ethereum.on?.("accountsChanged", async (accounts) => {
       if (!accounts?.length) return;
       currentAccount = accounts[0];
-      $('acct').textContent = currentAccount;
+      $("acct").textContent = currentAccount;
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
       if (addrInput.value) await initContract();
       await refreshAll();
     });
-    window.ethereum.on?.('chainChanged', async () => {
+    window.ethereum.on?.("chainChanged", async () => {
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
       const net = await provider.getNetwork();
-      $('net').textContent = `ChainId: ${net.chainId}`;
+      $("net").textContent = `ChainId: ${net.chainId}`;
       await refreshAll();
     });
   }
 
+  // Auto-init on load
+  (async () => {
+    // Nếu đã có address (từ localStorage hoặc default) thì init sẵn
+    if (addrInput.value) {
+      await initContract();
+      await refreshAll();
+    }
+  })();
+
 })();
-  async function loadLastWinner() {
-  if (!contract) return;
-  const curW = await contract.currentWeekId();
-  if (curW === 0n) { $('lastWinner').textContent = '-'; return; }
-  const lastW = curW - 1n;
-  const r = await contract.races(lastW);
-  $('lastWinner').textContent = r.winner;
-}
-await loadLastWinner();
 </script>
 </body>
 </html>
