@@ -30,7 +30,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Weekly Race dApp <span class="pill">DEV (Sepolia • 1p/ngày • 7p/tuần)</span></h1>
+    <h1>Cuộc đua tuần dApp - echlam_com<span class="pill">1 tuần 1 lượt đua</span></h1>
 
     <div class="card">
       <div class="row">
@@ -42,38 +42,35 @@
       <div style="height:8px"></div>
       <div class="row">
         <input id="addr" type="text" placeholder="Contract Address (0x...)" />
-        <button id="btnSave">Save</button>
-        <span class="pill">Owner: <span id="owner">?</span></span>
+        <button id="btnSave">Lưu</button>
+        <span class="pill">Admin: <span id="owner">?</span></span>
       </div>
-      <small>
-        Gợi ý: Địa chỉ dưới đã điền sẵn. Bạn có thể thay địa chỉ khác nếu re-deploy.
-      </small>
     </div>
 
     <div class="card">
       <div class="row">
-        <button id="btnCheckIn" class="primary">Check In (today)</button>
-        <button id="btnRefresh">Refresh Stats (current week)</button>
-        <button id="btnCreateRace">Create Race (last week, Owner only)</button>
+        <button id="btnCheckIn" class="primary">Check In</button>
+        <button id="btnRefresh">Cập nhật vé</button>
+        <button id="btnCreateRace">Tạo Cuộc Đua - Admin</button>
       </div>
       <div id="status" class="mono" style="margin-top:10px; white-space:pre-wrap;"></div>
     </div>
 
     <div class="card grid">
       <div>
-        <h3 style="margin:0 0 6px">Current</h3>
-        <div>currentWeekId: <span id="curW" class="mono">-</span></div>
-        <div>currentDayId: <span id="curD" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Hiện tại</h3>
+        <div>Số tuần: <span id="curW" class="mono">-</span></div>
+        <div>Số ngày: <span id="curD" class="mono">-</span></div>
       </div>
       <div>
-        <h3 style="margin:0 0 6px">Last Week</h3>
-        <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
-        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Tuần trước</h3>
+        <div>Số tuần trước: <span id="lastW" class="mono">-</span></div>
+        <div>Người thắng tuần trước: <span id="lastWinner" class="mono">-</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px">Participants (current week)</h3>
+      <h3 style="margin:0 0 10px">Người tham gia</h3>
       <table>
         <thead><tr><th>Address</th><th>Tickets</th></tr></thead>
         <tbody id="tbody"></tbody>
