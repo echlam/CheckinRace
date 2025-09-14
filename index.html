@@ -14,23 +14,23 @@
     .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:12px 0; }
     h1 { font-size:22px; margin:0 0 8px }
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    input[type=text] { background:#0f1522; border:1px solid var(--line); color:var(--txt); padding:10px 12px; border-radius:10px; min-width:360px; }
     button { background:#132030; border:1px solid var(--line); color:var(--txt); padding:10px 14px; border-radius:10px; cursor:pointer; }
     button:hover { border-color:#2a3952 }
     button.primary { background:var(--accent); border-color:transparent; color:#001b2e; font-weight:600 }
     .pill { padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line); background:#0f1522; color:var(--muted); }
-    .ok { color:var(--ok) } .warn{ color:var(--warn)} .err{color:var(--err)}
     .grid { display:grid; gap:8px; grid-template-columns: 1fr 1fr; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     a { color: var(--accent); text-decoration: none; }
     table { width:100%; border-collapse:collapse; }
     th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
     small { color: var(--muted); }
+    #status > .err { color: var(--err); }
+    #status > .warn { color: var(--warn); }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Cuộc đua tuần dApp - echlam_com<span class="pill">1 tuần 1 lượt đua</span></h1>
+    <h1>Weekly Race dApp <span class="pill">DEV (Sepolia • 1p/ngày • 7p/tuần)</span></h1>
 
     <div class="card">
       <div class="row">
@@ -38,37 +38,38 @@
         <button id="btnSwitch">Switch to Sepolia</button>
         <span id="acct" class="pill">Not connected</span>
         <span id="net" class="pill"></span>
+        <span class="pill">Owner: <span id="owner">?</span></span>
       </div>
-      <div style="height:8px"></div>
-      <div class="row">
-        <span class="pill">Admin: <span id="owner">?</span></span>
-      </div>
+      <small>
+        Contract address được cố định trong mã. Khi re-deploy, sửa hằng <b>DEFAULT_CONTRACT</b> trong file này.
+      </small>
     </div>
 
     <div class="card">
       <div class="row">
-        <button id="btnCheckIn" class="primary">Check In</button>
-        <button id="btnRefresh">Cập nhật vé</button>
-        <button id="btnCreateRace">Tạo Cuộc Đua - Admin</button>
+        <button id="btnCheckIn" class="primary">Check In (today)</button>
+        <button id="btnRefresh">Refresh Stats (current week)</button>
+        <!-- Nút Create Race bị ẩn mặc định; chỉ hiện nếu ví cho phép -->
+        <button id="btnCreateRace" style="display:none">Create Race (manager only)</button>
       </div>
       <div id="status" class="mono" style="margin-top:10px; white-space:pre-wrap;"></div>
     </div>
 
     <div class="card grid">
       <div>
-        <h3 style="margin:0 0 6px">Hiện tại</h3>
-        <div>Số tuần: <span id="curW" class="mono">-</span></div>
-        <div>Số ngày: <span id="curD" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Current</h3>
+        <div>currentWeekId: <span id="curW" class="mono">-</span></div>
+        <div>currentDayId: <span id="curD" class="mono">-</span></div>
       </div>
       <div>
-        <h3 style="margin:0 0 6px">Tuần trước</h3>
-        <div>Số tuần trước: <span id="lastW" class="mono">-</span></div>
-        <div>Người thắng tuần trước: <span id="lastWinner" class="mono">-</span></div>
+        <h3 style="margin:0 0 6px">Last Week</h3>
+        <div>lastWeekId: <span id="lastW" class="mono">-</span></div>
+        <div>Winner (last week): <span id="lastWinner" class="mono">-</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px">Người tham gia</h3>
+      <h3 style="margin:0 0 10px">Participants (current week)</h3>
       <table>
         <thead><tr><th>Address</th><th>Tickets</th></tr></thead>
         <tbody id="tbody"></tbody>
@@ -79,19 +80,19 @@
 <script>
 (() => {
   // ====== CONFIG ======
-  const DEFAULT_CONTRACT = "0x9cD8b9f00e4f51ae9c28E0c60f5d3842B92a1638"; // <— địa chỉ DEV (theo phút)
+  const DEFAULT_CONTRACT = "0x9cD8b9f00e4f51ae9c28E0c60f5d3842B92a1638"; // địa chỉ DEV (1p/ngày • 7p/tuần)
   const CHAIN_ID_HEX = "0xaa36a7"; // Sepolia (11155111)
   const EXPLORER = "https://sepolia.etherscan.io";
+  // Ví được phép nhìn thấy & bấm nút Create Race:
+  const ALLOWED_MANAGER = "0x2667208D4F9dce5fe330cDECf2eDef07A1640251".toLowerCase();
 
-  // ====== ABI rút gọn đủ chức năng ======
+  // ====== ABI rút gọn ======
   const CONTRACT_ABI = [
-    // views
     {"inputs":[],"name":"currentWeekId","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[],"name":"currentDayId","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"getParticipants","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"address","name":"","type":"address"}],"name":"tickets","outputs":[{"internalType":"uint32","name":"","type":"uint32"}],"stateMutability":"view","type":"function"},
     {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-    // mapping races getter (struct)
     {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],
      "name":"races",
      "outputs":[
@@ -101,10 +102,8 @@
       {"internalType":"uint256","name":"totalTickets","type":"uint256"},
       {"internalType":"uint256","name":"randomness","type":"uint256"}],
      "stateMutability":"view","type":"function"},
-    // writes
     {"inputs":[],"name":"checkIn","outputs":[],"stateMutability":"nonpayable","type":"function"},
     {"inputs":[{"internalType":"uint256","name":"weekId","type":"uint256"}],"name":"createRace","outputs":[],"stateMutability":"nonpayable","type":"function"},
-    // events (để parse logs)
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"player","type":"address"},{"indexed":true,"internalType":"uint256","name":"dayId","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint32","name":"newTicketCount","type":"uint32"}],"name":"CheckIn","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"totalTickets","type":"uint256"}],"name":"RaceCreated","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"weekId","type":"uint256"},{"indexed":true,"internalType":"address","name":"winner","type":"address"},{"indexed":false,"internalType":"uint256","name":"winningIndex","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"randomness","type":"uint256"}],"name":"WinnerSelected","type":"event"}
@@ -112,50 +111,35 @@
 
   // ====== Helpers ======
   const $ = (id) => document.getElementById(id);
-  const log = (msg, type) => {
-    const el = $("status");
+
+  // Log chỉ giữ 5 dòng gần nhất
+  const statusEl = $("status");
+  function log(msg, type) {
     const ts = new Date().toLocaleTimeString();
-    el.textContent = `[${ts}] ${msg}\n` + el.textContent;
-    if (type === "err") el.style.color = "var(--err)";
-    else if (type === "warn") el.style.color = "var(--warn)";
-    else el.style.color = "";
-  };
+    const line = document.createElement("div");
+    line.textContent = `[${ts}] ${msg}`;
+    if (type === "err") line.className = "err";
+    else if (type === "warn") line.className = "warn";
+    statusEl.prepend(line);
+    while (statusEl.childElementCount > 5) statusEl.removeChild(statusEl.lastElementChild);
+  }
 
   // ====== State ======
   let provider, signer, contract, currentAccount;
-
-  // ====== UI init ======
-  const addrInput = $("addr");
-  // set default address on first load
-  const saved = localStorage.getItem("race_addr");
-  if (!saved) {
-    addrInput.value = DEFAULT_CONTRACT;
-    localStorage.setItem("race_addr", DEFAULT_CONTRACT);
-  } else {
-    addrInput.value = saved;
-  }
-
-  $("btnSave").onclick = async () => {
-    const v = addrInput.value.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(v)) { log("❌ Contract address không hợp lệ", "err"); return; }
-    localStorage.setItem("race_addr", v);
-    await initContract();
-    await refreshAll();
-    log("✅ Saved contract address: " + v);
-  };
 
   $("btnConnect").onclick = async () => {
     if (!window.ethereum) { log("❌ Cài MetaMask trước đã", "err"); return; }
     await window.ethereum.request({ method: "eth_requestAccounts" });
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
-    currentAccount = await signer.getAddress();
+    currentAccount = (await signer.getAddress()).toLowerCase();
     $("acct").textContent = currentAccount;
     const net = await provider.getNetwork();
     $("net").textContent = `ChainId: ${net.chainId}`;
     if (net.chainId.toString() !== "11155111") log('⚠️ Chưa ở Sepolia, bấm "Switch to Sepolia"', "warn");
     await initContract();
     await refreshAll();
+    updateManagerButton();
     log("✅ Wallet connected");
   };
 
@@ -187,7 +171,7 @@
 
   $("btnCheckIn").onclick = async () => {
     try {
-      if (!contract) { log("❌ Chưa có contract address. Hãy dán vào ô và bấm Save.", "err"); return; }
+      if (!contract) { log("❌ Chưa khởi tạo contract (Connect trước).", "err"); return; }
       const tx = await contract.checkIn();
       log(`⏳ checkIn sent: ${tx.hash}`);
       const rc = await tx.wait();
@@ -202,15 +186,16 @@
 
   $("btnCreateRace").onclick = async () => {
     try {
-      if (!contract) { log("❌ Chưa có contract", "err"); return; }
+      if (!contract) { log("❌ Chưa khởi tạo contract (Connect trước).", "err"); return; }
+      if (!isManager()) { log("❌ Bạn không có quyền tạo race.", "err"); return; }
+
       const curW = await contract.currentWeekId();
-      if (curW === 0n) { // tránh weekId âm
+      if (curW === 0n) {
         log("⚠️ Chưa có tuần đã kết thúc (currentWeekId = 0). Chờ tuần DEV lật (≈7 phút).", "warn");
         return;
       }
       const lastW = curW - 1n;
 
-      // kiểm tra có vé tuần trước để tránh revert NO_TICKETS
       const addrs = await contract.getParticipants(lastW);
       let total = 0n;
       for (const a of addrs) total += BigInt(await contract.tickets(lastW, a));
@@ -224,7 +209,7 @@
       const rc = await tx.wait();
       log(`✅ createRace mined in block ${rc.blockNumber} — ${EXPLORER}/tx/${tx.hash}`);
 
-      // Parse WinnerSelected để in winner ngay
+      // Parse WinnerSelected
       const iface = new ethers.Interface(CONTRACT_ABI);
       for (const lg of rc.logs) {
         try {
@@ -244,27 +229,24 @@
     }
   };
 
+  function isManager() {
+    return currentAccount && currentAccount === ALLOWED_MANAGER;
+  }
+
+  function updateManagerButton() {
+    const btn = $("btnCreateRace");
+    if (isManager()) btn.style.display = "";
+    else btn.style.display = "none";
+  }
+
   async function initContract() {
-    const ca = addrInput.value.trim();
-    if (!ca) return;
     if (!provider) provider = new ethers.BrowserProvider(window.ethereum);
     if (!signer) signer = await provider.getSigner();
-    contract = new ethers.Contract(ca, CONTRACT_ABI, signer);
+    contract = new ethers.Contract(DEFAULT_CONTRACT, CONTRACT_ABI, signer);
     try {
       const own = await contract.owner();
       $("owner").textContent = own;
-      await updateOwnerButton();
     } catch {}
-  }
-
-  async function updateOwnerButton() {
-    try {
-      const own = await contract.owner();
-      const acc = await signer.getAddress();
-      const isOwner = own.toLowerCase() === acc.toLowerCase();
-      $("btnCreateRace").disabled = !isOwner;
-      $("btnCreateRace").title = isOwner ? "Owner action" : "Switch MetaMask sang ví Owner để dùng";
-    } catch { $("btnCreateRace").disabled = true; }
   }
 
   async function loadLastWinner() {
@@ -283,10 +265,9 @@
       $("curD").textContent = curD.toString();
       $("lastW").textContent = (curW - 1n >= 0n ? (curW - 1n).toString() : "-");
 
-      await updateOwnerButton();
       await loadLastWinner();
 
-      // load participants & tickets for current week
+      // participants & tickets of current week
       const weekId = curW;
       const addrs = await contract.getParticipants(weekId);
       const tbody = $("tbody"); tbody.innerHTML = "";
@@ -301,34 +282,24 @@
     }
   }
 
-  // listen account/network changes
   if (window.ethereum) {
     window.ethereum.on?.("accountsChanged", async (accounts) => {
       if (!accounts?.length) return;
-      currentAccount = accounts[0];
+      currentAccount = accounts[0].toLowerCase();
       $("acct").textContent = currentAccount;
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
-      if (addrInput.value) await initContract();
-      await refreshAll();
+      updateManagerButton();
+      if (contract) await refreshAll();
     });
     window.ethereum.on?.("chainChanged", async () => {
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
       const net = await provider.getNetwork();
       $("net").textContent = `ChainId: ${net.chainId}`;
-      await refreshAll();
+      if (contract) await refreshAll();
     });
   }
-
-  // Auto-init on load
-  (async () => {
-    // Nếu đã có address (từ localStorage hoặc default) thì init sẵn
-    if (addrInput.value) {
-      await initContract();
-      await refreshAll();
-    }
-  })();
 
 })();
 </script>
